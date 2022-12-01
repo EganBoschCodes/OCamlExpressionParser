@@ -1,11 +1,7 @@
-type ('exists) maybe =
-  | Yes of 'exists
-  | No
+#use "list_utils.ml"
 
-
-(* Most Basic String Utilities *)
-
-(* Convert string into char list *)
+(* Convert String into Char List *)
+(* Ex: "Hi!" -> ['H';'i';'!'] *)
 let rec split str = 
   match String.length str with
   | 0 -> []
@@ -19,31 +15,28 @@ let rec length str =
   | [] -> 0
   | a :: b -> 1 + (length b)
 
-(* Returns a list where a function is applied to every element of a given list. *)
-let rec apply_to_all f a =
-  match a with
-  | [] -> []
-  | hd :: tl -> (f hd) :: (apply_to_all f tl);;
-
-let rec starts_with str op =
-  match op with
+(* Check if a list starts with the delimiter *)
+let rec starts_with str delimiter =
+  match delimiter with
   | [] -> true
-  | op_start :: op_rest ->
+  | delim_start :: delim_rest ->
     match str with
     | [] -> false
     | str_start :: str_rest ->
-      match op_start = str_start with
-      | true -> starts_with str_rest op_rest
+      match delim_start = str_start with
+      | true -> starts_with str_rest delim_rest
       | false -> false
 
-let rec contains str op = 
+(* Check if a list contains the delimiter *)
+let rec contains str delimiter = 
   match str with
   | [] -> false
   | head :: rest -> 
-    match starts_with str op with
+    match starts_with str delimiter with
     | true -> true
-    | false -> contains rest op
+    | false -> contains rest delimiter
 
+(* Check if a list contains the delimiter and, if it does, return a monad containing the index. *)
 let index_of str op =
   let rec index_of_int str index =
     match starts_with str op with
@@ -54,15 +47,9 @@ let index_of str op =
       | _ :: rest -> index_of_int rest (index + 1)
   in index_of_int str 0
 
-let reverse_list input =
-  let rec reverse_internal inp out =  
-    match inp with
-    | [] -> out
-    | hd :: tl -> reverse_internal tl (hd :: out)
-  in reverse_internal input [];;
+
 
 (* Substrings *)
-
 let trim_before str start =
   let rec accumulate str start index =
     match str with
@@ -84,7 +71,12 @@ let trim_after str ending =
   in accumulate str ending 0
 
 let substring str start ending = trim_before (trim_after str ending) start
-  
+
+(* Removes first and last characters of a string, used to trim an expression out of a set of parenthesis *)
+let strip_ends str = substring str 1 ((length str) - 1)
+
+(* More than just the classic split, this will only split when the delimiter is not inside of a parenthesis *)
+(* This is so I can split on the commas to split function arguments, but it will keep a function call inside the other function contained *)
 let split_on str delimiter =
   let rec accumulate str splits current depth =
     match str with
@@ -101,7 +93,10 @@ let split_on str delimiter =
     | true -> accumulate (trim_before str (length delimiter)) (current :: splits) [] depth
   in reverse_list (apply_to_all reverse_list (accumulate str [] [] 0))
 
+
+
 (* Finds which in a list of operators occurs first outside of parenthesis, if they occur at all *)
+(* Used to split an expression on a list of operators carrying equal Order of Operations priority. *)
 let first_occurance str ops =
   let rec first_occurance_index str ops index depth = 
     let rec starts_on_ops str ops =
@@ -134,52 +129,19 @@ let first_occurance str ops =
         
   in first_occurance_index str ops 0 0
 
-(* Removes first and last characters of a string *)
-let strip_ends str =
-  let rec strip_last str =
-    match str with
-    | [] -> []
-    | [a] -> []
-    | a :: b -> a :: (strip_last b)
-  in match str with
-  | [] -> []
-  | a :: b -> strip_last b
 
 
-
-
-
-
-
-(* Given a list of items and a function that takes in two vals from the list and outputs another item of the list type, collapse to the end. Useful for && and || on boolean arrays. *)
-let rec collapse_list f a =
-  match a with 
-  | hd :: [] -> hd
-  | hd :: tl -> f hd (collapse_list f tl);;
-
-let is_alpha c =
-  let code = Char.code(c) in (code > 96 && code < 123) || (code > 64 && code < 91)
-
-let is_numeric c =
-  let code = Char.code(c) in (code > 47 && code < 58)
-
+(* Basic character checkers *)
+let is_alpha c = let code = Char.code(c) in (code > 96 && code < 123) || (code > 64 && code < 91)
+let is_numeric c = let code = Char.code(c) in (code > 47 && code < 58)
 let is_alpha_numeric c = (is_alpha c) || (is_numeric c)
 
 let is_valid_variable str = collapse_list (&&) (apply_to_all is_alpha_numeric str);;
 
 
+
 (* Parsing Floats *)
-
-let count str c =
-  let rec count_acc str c acc =
-    match str with
-    | [] -> acc
-    | a :: b ->
-    match a = c with
-    | true -> count_acc b c (acc + 1)
-    | false -> count_acc b c acc
-  in count_acc str c 0
-
+(* Check if the string is even properly formatted to be parsed *)
 let rec can_be_parsed str =
   match str with
   | [] -> false
@@ -191,8 +153,10 @@ let rec can_be_parsed str =
   | No -> collapse_list (&&) (apply_to_all is_numeric str)
   | Yes decimal_index -> (count str '.') = 1 && (decimal_index > 0) && (decimal_index < (length str) - 1) && (collapse_list (&&) (apply_to_all (fun c -> (is_numeric c) || (c = '.')) str))
 
+(* Character to a float value ('1' -> 1.) *)
 let parse_char c = float_of_int (Char.code(c) - 48)
 
+(* Actually parse the float *)
 let rec parse_float str = 
   match can_be_parsed str with
   | false -> No
@@ -218,6 +182,7 @@ let rec parse_float str =
 
 
 (* Parsing function-formatted strings into (functionName, arguments) *)
+(* (split "max(a,b,c)") -> ((split "max"), [[['a']];[['b']];[['c']]]) *)
 let parse_function str =
   match index_of str ['('] with
   | No -> No
