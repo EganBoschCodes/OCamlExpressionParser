@@ -1,13 +1,14 @@
 #use "string_utils.ml"
 #use "math.ml"
 
+(* The type encapsulating the four different kinds of expressions *)
 type ('const, 'symbol) expression =
   | Constant of 'const
   | Symbol of 'symbol
   | Operator of (float maybe -> float maybe -> float maybe) * ('const, 'symbol) expression * ('const, 'symbol) expression
   | Function of (float maybe list -> float maybe) * (('const, 'symbol) expression list)
 
-
+(* Strip away wrapping parenthesis - I.E. "(a+(b+c))" -> "a+(b+c)" *)
 let rec strip_paren str = 
   let is_just_paren str =
     match str with 
@@ -34,11 +35,11 @@ let rec strip_paren str =
   | true -> strip_paren (strip_ends str)
   | false -> str
 
-let is a = match a with | Yes _ -> true | No -> false
-
+(* Take functions that operate on floats and make them operate on float maybes *)
 let wrap_single func = fun a -> match a with | Yes value -> Yes (func value) | No -> No
 let wrap_double func = fun a b -> match a with | Yes aval -> (match b with | Yes bval -> Yes (func aval bval) | No -> No) | No -> No
 
+(* Map char lists representing operations to the function they actually represent *)
 let operator op = match op with
   | ['+'] -> wrap_double (fun a b -> a +. b)
   | ['-'] -> wrap_double (fun a b -> a -. b)
@@ -52,13 +53,7 @@ let operator op = match op with
   | ['>'] -> wrap_double (fun a b -> match (a > b) with | true -> 1. | false -> 0.)
   | _ -> fun a b -> No
 
-let rec unwrap l = 
-  match l with
-  | [] -> []
-  | a :: b ->
-  match a with
-  | Yes value -> value :: (unwrap b)
-  | No -> unwrap b
+
 
 (* Take a (float list -> float) and make it (float maybe list -> float maybe) *)
 let wrap_list func = fun l -> 
@@ -73,12 +68,14 @@ let wrap_into_list_single func = fun l ->
   | a :: [] -> Yes (func a)
   | _ -> No
 
+(* Take a (float -> float -> float) and make it (float maybe list -> float maybe) *)
 let wrap_into_list_double func = fun l ->
   match unwrap l with
   | [] -> No
   | a :: (b :: []) -> Yes (func a b)
   | _ -> No
 
+(* Map char lists representing functions to the function they actually represent *)
 let functions f = match f with
   | ['m';'a';'x'] -> wrap_list max
   | ['m';'i';'n'] -> wrap_list min
@@ -94,6 +91,7 @@ let functions f = match f with
   | ['m';'a';'g';'2'] -> wrap_list mag2
   | _ -> fun _ -> No
 
+(* MAIN LOGIC - Take a string and turn it into a parsed expression *)
 let rec parse str =
   let expr = strip_paren str in
   match length expr with
@@ -127,6 +125,7 @@ let rec parse str =
   | Yes (name, args) -> Function ((functions name), apply_to_all parse args)
   | No -> Constant (No)
 
+(* The rather simple way to evaluate a parsed expression, substituting defined values for the variables into the expression *)
 let rec evaluate expr variables =
   match expr with
   | Constant value -> value

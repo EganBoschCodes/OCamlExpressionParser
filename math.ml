@@ -1,3 +1,4 @@
+(* Defining some custom definitions for my parsed evaluations *)
 let compare l func = 
   let rec compare_inner l mval =
     match l with
